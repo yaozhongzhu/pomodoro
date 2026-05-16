@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Serve pomodoro PWA on LAN — accessible from phone."""
+"""Serve pomodoro PWA on LAN."""
 
 import http.server
 import os
 import socket
-import sys
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-os.chdir(DIR)
 
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -18,14 +16,17 @@ MIME = {
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIR, **kwargs)
+
     def guess_type(self, path):
         ext = os.path.splitext(path)[1]
         return MIME.get(ext, "text/plain")
 
     def do_GET(self):
-        if self.path == "/":
+        if self.path == "/" or self.path == "/index.html":
             self.path = "/pomodoro.html"
-        return super().do_GET()
+        super().do_GET()
 
     def log_message(self, fmt, *args):
         print(f"[{self.client_address[0]}] {args[0]}")
@@ -50,8 +51,4 @@ if __name__ == "__main__":
     print(f"  手机浏览器:  http://{ip}:{PORT}")
     print(f"\n  手机打开后用 Safari/Chrome 添加到主屏幕\n")
     print(f"  Ctrl+C 停止服务\n")
-
-    try:
-        http.server.HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
-    except KeyboardInterrupt:
-        print("\n已停止")
+    http.server.HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
