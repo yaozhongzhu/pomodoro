@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>番茄钟</title>
+
+<!-- PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="番茄钟">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="./manifest.json">
+
+<!-- Icon -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'><rect width='192' height='192' rx='36' fill='%231a1a2e'/><circle cx='96' cy='96' r='72' fill='none' stroke='%23ff6b8a' stroke-width='10'/><line x1='96' y1='96' x2='96' y2='36' stroke='%23ff6b8a' stroke-width='8' stroke-linecap='round'/><circle cx='96' cy='96' r='12' fill='%23ff6b8a'/></svg>">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #1a1a2e; color: #e0e0ff;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; user-select: none;
+  }
+  .app { width: 480px; padding: 24px 20px; text-align: center; }
+
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+  .stats { font-size: 12px; color: #8888a0; margin-bottom: 14px; }
+
+  /* task input */
+  .task-wrap {
+    display: flex; background: #0f3460; border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+  }
+  .task-wrap input {
+    flex:1; background: transparent; border: none; color: #e0e0ff; font-size: 15px;
+    padding: 10px 14px; outline: none;
+  }
+  .task-wrap input::placeholder { color: #666; }
+  .task-wrap button {
+    background: transparent; border: none; color: #888; font-size: 16px;
+    padding: 0 14px; cursor: pointer;
+  }
+
+  /* mode buttons */
+  .modes { display: flex; gap: 10px; margin-bottom: 18px; justify-content: center; }
+  .mode-btn {
+    padding: 10px 22px; border-radius: 10px; border: none;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-btn.work    { background:#2a2a4a; color:#ff6b8a; }
+  .mode-btn.break-s { background:#2a2a4a; color:#6bff90; }
+  .mode-btn.break-l { background:#2a2a4a; color:#6bb5ff; }
+  .mode-btn.active.work    { background:#ff6b8a; color:#1a1a2e; }
+  .mode-btn.active.break-s { background:#6bff90; color:#1a1a2e; }
+  .mode-btn.active.break-l { background:#6bb5ff; color:#1a1a2e; }
+
+  /* clock */
+  .clock-container { position: relative; width: 320px; height: 320px; margin: 0 auto 16px; }
+  svg { width: 320px; height: 320px; }
+
+  /* dots */
+  .dots { display: flex; gap: 12px; justify-content: center; margin-bottom: 16px; align-items: center; }
+  .dots span { font-size: 12px; color: #8888a0; }
+  .dot { font-size: 22px; color: #444; transition: color 0.3s; }
+  .dot.filled { color: #ff6b8a; }
+
+  /* controls */
+  .controls { display: flex; gap: 14px; justify-content: center; margin-bottom: 14px; }
+  .ctrl-btn {
+    padding: 14px 38px; border-radius: 14px; border: none;
+    font-size: 17px; font-weight: 700; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-start { background:#2a2a4a; color:#6bff90; }
+  .btn-start.running { background:#2a2a4a; color:#ffe08a; }
+  .btn-reset { background:#2a2a4a; color:#ff6b8a; }
+  .ctrl-btn:hover { filter: brightness(1.2); }
+
+  .pin-btn {
+    background: transparent; border: none; color: #888;
+    font-size: 11px; cursor: pointer; padding: 6px 12px;
+  }
+  .pin-btn.pinned { color: #ffe08a; }
+
+  .tip { font-size: 10px; color: #555; margin-top: 10px; }
+
+  @keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  .pop { animation: pop 0.4s ease; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>番茄钟</h1>
+  <div class="stats" id="stats">今日已完成 0 个番茄</div>
+
+  <!-- Task input -->
+  <div class="task-wrap">
+    <input type="text" id="taskInput" placeholder="输入任务名称..." autocomplete="off">
+    <button onclick="clearTask()">✕</button>
+  </div>
+
+  <!-- Mode buttons -->
+  <div class="modes">
+    <button class="mode-btn work active" onclick="switchMode('work')">专注</button>
+    <button class="mode-btn break-s" onclick="switchMode('short_break')">短休息</button>
+    <button class="mode-btn break-l" onclick="switchMode('long_break')">长休息</button>
+  </div>
+
+  <!-- Clock -->
+  <div class="clock-container" id="clockContainer">
+    <svg id="clockSvg" viewBox="0 0 320 320">
+    </svg>
+  </div>
+
+  <!-- Session dots -->
+  <div class="dots">
+    <span>本轮</span>
+    <span class="dot" id="dot0">●</span>
+    <span class="dot" id="dot1">●</span>
+    <span class="dot" id="dot2">●</span>
+    <span class="dot" id="dot3">●</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="ctrl-btn btn-start" id="btnStart" onclick="toggle()">▶  开始</button>
+    <button class="ctrl-btn btn-reset" onclick="reset()">↺  重置</button>
+  </div>
+
+  <button class="pin-btn" id="pinBtn" onclick="togglePin()">📌 置顶</button>
+  <div class="tip">空格键 开始/暂停 · Esc 重置</div>
+</div>
+
+<script>
+// ── State ───────────────────────────────────────────────
+const WORK = 25 * 60;
+const SHORT_BREAK = 5 * 60;
+const LONG_BREAK = 15 * 60;
+const SESSIONS_BEFORE_LONG = 4;
+
+let mode = 'work';
+let remaining = WORK;
+let total = WORK;
+let running = false;
+let completed = 0;
+let tickInterval = null;
+let tickStart = 0;
+let tickRemainingStart = 0;
+
+// Load history
+let today = new Date().toISOString().slice(0,10);
+let history = JSON.parse(localStorage.getItem('pomodoro_history') || '{"sessions":[]}');
+let todayCount = history.sessions.filter(s => s.date === today).length;
+
+let pinned = false;
+
+// ── Functions ───────────────────────────────────────────
+function totalFor(m) {
+  return m === 'work' ? WORK : m === 'short_break' ? SHORT_BREAK : LONG_BREAK;
+}
+
+function switchMode(m) {
+  if (m === mode) return;
+  stop();
+  mode = m;
+  total = totalFor(m);
+  remaining = total;
+  updateModeButtons();
+  updateDots();
+  drawClock();
+}
+
+function updateModeButtons() {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  const cls = mode === 'work' ? 'work' : mode === 'short_break' ? 'break-s' : 'break-l';
+  document.querySelectorAll('.mode-btn.' + cls)[0].classList.add('active');
+}
+
+function updateDots() {
+  const c = completed % SESSIONS_BEFORE_LONG;
+  for (let i = 0; i < SESSIONS_BEFORE_LONG; i++) {
+    const el = document.getElementById('dot' + i);
+    el.className = 'dot' + (i < c ? ' filled' : '');
+    el.textContent = i < c ? '●' : '○';
+  }
+}
+
+function toggle() {
+  if (running) {
+    stop();
+  } else {
+    start();
+  }
+}
+
+function start() {
+  running = true;
+  tickStart = Date.now();
+  tickRemainingStart = remaining;
+  document.getElementById('btnStart').textContent = '⏸  暂停';
+  document.getElementById('btnStart').classList.add('running');
+  tickInterval = setInterval(tick, 200);
+}
+
+function stop() {
+  running = false;
+  if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+  document.getElementById('btnStart').textContent = '▶  开始';
+  document.getElementById('btnStart').classList.remove('running');
+}
+
+function reset() {
+  stop();
+  remaining = totalFor(mode);
+  total = remaining;
+  drawClock();
+}
+
+function tick() {
+  const elapsed = Math.floor((Date.now() - tickStart) / 1000);
+  remaining = Math.max(0, tickRemainingStart - elapsed);
+  if (remaining <= 0) { complete(); return; }
+  drawClock();
+}
+
+function complete() {
+  stop();
+  playSound();
+  if (mode === 'work') {
+    completed++;
+    todayCount++;
+    history.sessions.push({
+      date: today,
+      task: document.getElementById('taskInput').value.trim(),
+      time: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}),
+    });
+    localStorage.setItem('pomodoro_history', JSON.stringify(history));
+    document.getElementById('stats').textContent = `今日已完成 ${todayCount} 个番茄`;
+    updateDots();
+    switchMode(completed % SESSIONS_BEFORE_LONG === 0 ? 'long_break' : 'short_break');
+    // pop animation
+    document.getElementById('clockContainer').classList.add('pop');
+    setTimeout(() => document.getElementById('clockContainer').classList.remove('pop'), 400);
+  } else {
+    switchMode('work');
+    document.getElementById('clockContainer').classList.add('pop');
+    setTimeout(() => document.getElementById('clockContainer').classList.remove('pop'), 400);
+  }
+}
+
+function clearTask() {
+  document.getElementById('taskInput').value = '';
+}
+
+function togglePin() {
+  pinned = !pinned;
+  const btn = document.getElementById('pinBtn');
+  btn.textContent = pinned ? '📌 已置顶' : '📌 置顶';
+  btn.className = pinned ? 'pin-btn pinned' : 'pin-btn';
+  // Note: pin in browser context is best-effort
+}
+
+function playSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+// ── SVG Clock Drawing ──────────────────────────────────
+const CX = 160, CY = 160, R = 138;
+const ringW = 12;
+const rProg = R + ringW / 2;
+
+function polar(angleDeg, radius) {
+  const a = (angleDeg - 90) * Math.PI / 180;
+  return { x: CX + radius * Math.cos(a), y: CY + radius * Math.sin(a) };
+}
+
+function drawClock() {
+  const svg = document.getElementById('clockSvg');
+  const accents = { work: '#ff6b8a', short_break: '#6bff90', long_break: '#6bb5ff' };
+  const accent = accents[mode];
+
+  const progress = total > 0 ? remaining / total : 0;
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+
+  let html = '';
+
+  // ── Background circle ────────────────────────────────
+  html += `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#2a2a4a" stroke-width="3"/>`;
+
+  // ── Progress ring ────────────────────────────────────
+  if (progress > 0) {
+    const dashLen = 2 * Math.PI * rProg;
+    const dashProgress = dashLen * progress;
+    // Outer ring: entire circle as background
+    html += `<circle cx="${CX}" cy="${CY}" r="${rProg}" fill="none"
+              stroke="#2a2a4a" stroke-width="${ringW}"/>`;
+    // Progress arc
+    html += `<circle cx="${CX}" cy="${CY}" r="${rProg}" fill="none"
+              stroke="${accent}" stroke-width="${ringW}"
+              stroke-dasharray="${dashProgress} ${dashLen - dashProgress}"
+              stroke-dashoffset="${dashLen * 0.25}"
+              stroke-linecap="butt" transform="rotate(-90 ${CX} ${CY})"/>`;
+  } else {
+    // full grey ring when no progress
+    html += `<circle cx="${CX}" cy="${CY}" r="${rProg}" fill="none"
+              stroke="#2a2a4a" stroke-width="${ringW}"/>`;
+  }
+
+  // ── Hour ticks + numbers ─────────────────────────────
+  for (let h = 0; h < 12; h++) {
+    const a = h * 30;
+    const inner = polar(a, R - 18);
+    const outer = polar(a, R);
+    html += `<line x1="${inner.x}" y1="${inner.y}" x2="${outer.x}" y2="${outer.y}"
+              stroke="#c0c0e0" stroke-width="4" stroke-linecap="round"/>`;
+    const numPos = polar(a, R - 36);
+    html += `<text x="${numPos.x}" y="${numPos.y + 6}" text-anchor="middle"
+              fill="#c0c0e0" font-size="16" font-weight="700">${h === 0 ? 12 : h}</text>`;
+  }
+
+  // ── Minute ticks ─────────────────────────────────────
+  for (let m = 0; m < 60; m++) {
+    if (m % 5 === 0) continue;
+    const a = m * 6;
+    const inner = polar(a, R - 8);
+    const outer = polar(a, R);
+    html += `<line x1="${inner.x}" y1="${inner.y}" x2="${outer.x}" y2="${outer.y}"
+              stroke="#555" stroke-width="1"/>`;
+  }
+
+  // ── Clock hand ───────────────────────────────────────
+  if (total > 0) {
+    const handAngle = (1 - progress) * 360;
+    const handTip = polar(handAngle, R - 44);
+    // shadow
+    html += `<line x1="${CX+2}" y1="${CY+2}" x2="${handTip.x+2}" y2="${handTip.y+2}"
+              stroke="#000" stroke-width="6" stroke-linecap="round"/>`;
+    // hand
+    html += `<line x1="${CX}" y1="${CY}" x2="${handTip.x}" y2="${handTip.y}"
+              stroke="${accent}" stroke-width="6" stroke-linecap="round"/>`;
+    // center dot
+    html += `<circle cx="${CX}" cy="${CY}" r="10" fill="none" stroke="${accent}" stroke-width="3"/>`;
+    html += `<circle cx="${CX}" cy="${CY}" r="4" fill="${accent}"/>`;
+  }
+
+  // ── Digital time ─────────────────────────────────────
+  html += `<text x="${CX}" y="${CY - 45}" text-anchor="middle"
+            fill="#e0e0ff" font-size="44" font-weight="700">${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</text>`;
+
+  // ── Mode label ───────────────────────────────────────
+  const labels = { work: '专注中', short_break: '短休息', long_break: '长休息' };
+  html += `<text x="${CX}" y="${CY + 32}" text-anchor="middle"
+            fill="#8888a0" font-size="14">${labels[mode]}</text>`;
+
+  svg.innerHTML = html;
+}
+
+// ── Keyboard ───────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.activeElement !== document.getElementById('taskInput')) {
+    e.preventDefault(); toggle();
+  }
+  if (e.code === 'Escape') { e.preventDefault(); reset(); }
+});
+
+// ── Init ───────────────────────────────────────────────
+document.getElementById('stats').textContent = `今日已完成 ${todayCount} 个番茄`;
+updateModeButtons();
+updateDots();
+drawClock();
+// Service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
+</body>
+</html>
